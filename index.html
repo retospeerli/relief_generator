@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swiss Relief STL Generator v7.0 · Grossrelief · swissALTI³D · swissALTIRegio · swissBUILDINGS³D · Quelle: swisstopo</title>
+  <meta name="description" content="Erzeugt 3D-druckbare STL-Reliefs aus swissALTI³D, swissALTIRegio und swissBUILDINGS³D. Quelle: swisstopo." />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Swiss Relief STL Generator <span id="appVersion">v7.0</span></h1>
+      <p>Grossreliefs in druckfertigen Segmenten · swissALTI³D · swissALTIRegio · swissBUILDINGS³D · Quelle: swisstopo</p>
+    </div>
+    <div class="badge">Autor: Reto Speerli</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel map-panel">
+      <div class="panel-head">
+        <div>
+          <h2>1. Gebiet wählen</h2>
+          <p>Mit dem Rechteck-Werkzeug einen Landschaftsausschnitt markieren.</p>
+        </div>
+        <button id="clearBtn" class="button ghost">Auswahl löschen</button>
+      </div>
+      <div id="map"></div>
+      <div class="selection-info" id="selectionInfo">Noch kein Gebiet gewählt.</div>
+    </section>
+
+    <aside class="panel controls-panel">
+      <h2>2. Grossrelief einstellen</h2>
+
+      <label class="field">
+        <span>Quelldaten</span>
+        <select id="sourceResolution">
+          <option value="auto" selected>Automatisch – empfohlen</option>
+          <option value="2">swissALTI³D 2 m – schnell</option>
+          <option value="0.5">swissALTI³D 0,5 m – nur für kleine, extrem feine Modelle</option>
+        </select>
+      </label>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Gesamtbreite des Modells</span>
+          <div class="unit-input"><input id="modelWidth" type="number" min="100" max="5000" step="10" value="1200"><b>mm</b></div>
+        </label>
+        <label class="field">
+          <span>Max. Druckfeld</span>
+          <div class="unit-input"><input id="printerSize" type="number" min="80" max="500" step="1" value="220"><b>mm</b></div>
+        </label>
+      </div>
+
+      <div class="grid2">
+        <label class="field">
+          <span>Basisdicke</span>
+          <div class="unit-input"><input id="baseThickness" type="number" min="0.5" max="30" step="0.5" value="3"><b>mm</b></div>
+        </label>
+        <label class="field">
+          <span>Höhenüberhöhung</span>
+          <div class="unit-input"><input id="zExaggeration" type="number" min="0.1" max="10" step="0.1" value="1.5"><b>×</b></div>
+        </label>
+      </div>
+
+      <div class="auto-resolution-box">
+        <b>Auflösung: automatisch</b>
+        <div class="building-hint">Das Mesh wird auf ca. 0,35 mm Punktabstand pro Drucksegment ausgelegt – etwas feiner als die sinnvoll druckbare XY-Auflösung eines typischen FDM-Druckers. Gemeinsame Segmentkanten verwenden exakt dieselben Höhenpunkte.</div>
+      </div>
+
+      <label class="checkline">
+        <input id="smoothMissing" type="checkbox" checked>
+        <span>Kleine NoData-Restlücken interpolieren</span>
+      </label>
+
+      <div class="building-box">
+        <label class="checkline building-toggle">
+          <input id="includeBuildings" type="checkbox">
+          <span>Gebäude darstellen (swissBUILDINGS³D)</span>
+        </label>
+        <div id="buildingEligibility" class="building-hint">Gebäude werden nur bei geeignetem Massstab freigeschaltet.</div>
+      </div>
+
+      <div class="metrics" id="metrics">
+        <div><span>Gesamtmodell</span><b>–</b></div>
+        <div><span>Segmentierung</span><b>–</b></div>
+        <div><span>Segmentgrösse / Mesh</span><b>–</b></div>
+        <div><span>Massstab</span><b>–</b></div>
+      </div>
+
+      <button id="generateBtn" class="button primary" disabled>Grossrelief erzeugen</button>
+      <button id="downloadBtn" class="button secondary" disabled>ZIP mit STL-Segmenten herunterladen</button>
+
+      <div class="status-wrap">
+        <div class="status-row"><span id="statusText">Bereit.</span><span id="statusPct"></span></div>
+        <progress id="progress" max="100" value="0"></progress>
+      </div>
+
+      <details>
+        <summary>Technische Details</summary>
+        <p>Die App teilt das Gesamtmodell automatisch in gleich grosse, druckbettgerechte STL-Segmente. Jedes Segment wird aus demselben globalen LV95-Modell und demselben Höhenbezug erzeugt; gemeinsame Kanten werden numerisch identisch übernommen. Die Auflösung wird automatisch auf die Druckqualität abgestimmt. swissALTI³D ist die Primärquelle, swissALTIRegio ergänzt Grenzgebiete. Optional können bei geeignetem Massstab swissBUILDINGS³D-Gebäude ergänzt werden.</p>
+        <div id="debug" class="debug"></div>
+      </details>
+    </aside>
+
+    <section class="panel preview-panel">
+      <div class="panel-head">
+        <div>
+          <h2>3. 3D-Vorschau</h2>
+          <p>Linke Maustaste: drehen · Mausrad: zoomen · rechte Maustaste: verschieben</p>
+        </div>
+        <button id="resetViewBtn" class="button ghost">Ansicht zurücksetzen</button>
+      </div>
+      <div id="preview"><div class="preview-placeholder">Nach dem Laden erscheint hier das Relief.</div></div>
+      <div class="result-info" id="resultInfo"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Daten: © swisstopo · swissALTI³D / swissALTIRegio / swissBUILDINGS³D</span>
+    <span>Die Verarbeitung findet lokal im Browser statt.</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/geotiff@3.0.5/dist-browser/geotiff.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/proj4@2.22.0/dist/proj4.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/examples/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="app.js?v=7.0"></script>
+</body>
+</html>
